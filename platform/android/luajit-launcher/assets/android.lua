@@ -2437,6 +2437,21 @@ local function run(android_app_state)
         end)
     end
 
+    -- Kompakt: the page drawn while the phone is locked, a PNG file, to the system (KompaktReader.kt).
+    android.kompaktPage = function(path)
+        return JNI:context(android.app.activity.vm, function(jni)
+            local page_path = jni.env[0].NewStringUTF(jni.env, path)
+            local rc = jni:callIntMethod(
+                android.app.activity.clazz,
+                "kompaktPage",
+                "(Ljava/lang/String;)I",
+                page_path
+            )
+            jni.env[0].DeleteLocalRef(jni.env, page_path)
+            return rc
+        end)
+    end
+
     android.getNetworkInfo = function()
         return JNI:context(android.app.activity.vm, function(jni)
             local network_info = jni:callObjectMethod(

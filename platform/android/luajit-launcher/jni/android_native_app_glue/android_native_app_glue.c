@@ -33,6 +33,8 @@
 #define  TAG "NativeGlue"
 
 static int g_event_write_fd = -1;
+/* Kompakt: the command pipe's write end, for commands sent from Java (KompaktReader.kt). */
+static int g_cmd_write_fd = -1;
 
 #define LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__))
 #define LOGV(...) ((void)__android_log_print(ANDROID_LOG_VERBOSE, TAG, __VA_ARGS__))
@@ -311,6 +313,7 @@ static struct android_app* android_app_create(ANativeActivity* activity,
 
     android_app->msgread = msgpipe[0];
     android_app->msgwrite = msgpipe[1];
+    g_cmd_write_fd = msgpipe[1];
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -375,6 +378,7 @@ static void android_app_free(struct android_app* android_app) {
     }
     pthread_mutex_unlock(&android_app->mutex);
 
+    g_cmd_write_fd = -1;
     close(android_app->msgread);
     close(android_app->msgwrite);
     pthread_cond_destroy(&android_app->cond);
@@ -534,6 +538,28 @@ Java_org_koreader_launcher_EventReceiver_nativeSendEvent(JNIEnv* env, jclass cla
     if (written != (ssize_t)sizeof(msg)) {
         int err = errno;
         LOGE("Failed to write event socket: %s", strerror(err));
+        return -err;
+    }
+
+    return 0;
+}
+
+/* Kompakt: a command for the Lua loop, read with the activity's own (KompaktReader.kt). */
+JNIEXPORT jint JNICALL
+Java_org_koreader_launcher_KompaktReader_nativeSendCommand(JNIEnv* env, jclass clazz, jint cmd) {
+    (void)env;
+    (void)clazz;
+
+    int fd = g_cmd_write_fd;
+    if (fd < 0) {
+        LOGE("Command pipe is not available");
+        return -1;
+    }
+
+    int8_t c = (int8_t)cmd;
+    if (write(fd, &c, sizeof(c)) != (ssize_t)sizeof(c)) {
+        int err = errno;
+        LOGE("Failed to write command pipe: %s", strerror(err));
         return -err;
     }
 

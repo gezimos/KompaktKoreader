@@ -186,6 +186,9 @@ end
 
 local UIManager = require("ui/uimanager")
 
+-- Kompakt: the phone's own look (frontend/kompaktlook.lua), where the late user patches run, before them.
+require("kompaktlook")
+
 -- Apply developer patches
 userpatch.applyPatches(userpatch.late)
 

@@ -15,6 +15,50 @@ local T = FFIUtil.template
 local function yes() return true end
 local function no() return false end
 
+-- Kompakt: on a Mudita Kompakt running KompaktOS, the book stays on the e-ink screen when the
+-- phone locks, and the system sends the volume keys here (KompaktReader.kt, through the command
+-- pipe). Each turns the page as it would on screen; the page, drawn off screen, goes back to the
+-- system, which paints it on the sleeping screen.
+local KOMPAKT_VOLUME_UP = 120
+local KOMPAKT_VOLUME_DOWN = 121
+
+local function kompaktSendPage(screen)
+    UIManager:forceRePaint()
+    local Blitbuffer = require("ffi/blitbuffer")
+    local bb = screen.full_bb or screen.bb
+    -- As the copy to the window does it (ffi/framebuffer_android.lua), in greys.
+    local page = Blitbuffer.new(bb.w, bb.h, Blitbuffer.TYPE_BB8)
+    page:setRotation(bb:getRotation())
+    page:blitFrom(bb)
+    page:setRotation(0)
+    if bb:getInverse() == 1 and Blitbuffer:getUseCBB() then
+        page:invertRect(0, 0, page:getWidth(), page:getHeight())
+    end
+    local path = android.dir .. "/kompakt-page.png"
+    local ok, err = pcall(page.writePNG, page, path)
+    page:free()
+    if not ok then
+        logger.warn("Kompakt: cannot write the page:", err)
+        return
+    end
+    if android.kompaktPage(path) ~= 0 then
+        logger.warn("Kompakt: the page did not reach the system")
+    end
+end
+
+local function kompaktPageKey(input, code)
+    if android.getVolumeKeysIgnored() then
+        logger.info("Kompakt: volume key while locked, left to the system as set in KOReader")
+        return
+    end
+    local key = code == KOMPAKT_VOLUME_UP and C.AKEYCODE_VOLUME_UP or C.AKEYCODE_VOLUME_DOWN
+    local press = input:handleKeyBoardEv({ type = C.EV_KEY, code = key, value = 1 })
+    input:handleKeyBoardEv({ type = C.EV_KEY, code = key, value = 0 })
+    -- After the key press is handled: the page it turned is drawn, then sent.
+    UIManager:nextTick(kompaktSendPage, input.device.screen)
+    return press
+end
+
 local function getCodename()
     local api = android.app.activity.sdkVersion
     local codename = ""
@@ -219,6 +263,8 @@ function Device:init()
                 if not android.prop.brokenLifecycle then
                     UIManager:broadcastEvent(Event:new("RequestSuspend"))
                 end
+            elseif ev.code == KOMPAKT_VOLUME_UP or ev.code == KOMPAKT_VOLUME_DOWN then
+                return kompaktPageKey(this, ev.code)
             elseif ev.code == C.AEVENT_POWER_CONNECTED then
                 UIManager:broadcastEvent(Event:new("Charging"))
             elseif ev.code == C.AEVENT_POWER_DISCONNECTED then

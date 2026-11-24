@@ -162,5 +162,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
+        <!-- Kompakt: the volume keys turn the page while the phone is locked; sent by the system only. -->
+        <receiver
+            android:name=".KompaktReader"
+            android:exported="true"
+            android:permission="android.permission.DEVICE_POWER">
+            <intent-filter>
+                <action android:name="com.kompakt.reader.action.KEY" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.*
@@ -152,6 +153,13 @@ class MainActivity : NativeActivity(), LuaInterface,
         device.epd.resume()
         timeout.onResume(this)
         isResumed = true
+        KompaktReader.noteRotation(this)
+    }
+
+    /* Kompakt: the page drawn while locked goes on the glass the way the reader was turned. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (isResumed) KompaktReader.noteRotation(this)
     }
 
     /* Called when another activity is taking focus. */
@@ -688,6 +696,11 @@ class MainActivity : NativeActivity(), LuaInterface,
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    /* Kompakt: called from Lua with the page drawn while the phone is locked. */
+    fun kompaktPage(path: String): Int {
+        return KompaktReader.sendPage(this, path)
     }
 
     override fun setClipboardText(text: String) {
